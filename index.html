@@ -1,192 +1,165 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>LAN P2P Chat (Short Codes)</title>
-<style>
-  body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; }
-  h1 { font-size: 1.3rem; margin-bottom: 8px; }
-  h2 { font-size: 1.1rem; margin: 16px 0 8px; }
-  button { padding: 6px 10px; margin: 4px; border-radius: 6px; cursor: pointer; }
-  textarea { width: 100%; min-height: 70px; margin-top: 6px; }
-  .panel { border: 1px solid #8884; border-radius: 8px; padding: 12px; margin-top: 12px; }
-  .peer-card { border: 1px solid #8884; border-radius: 8px; padding: 10px; margin-top: 10px; }
-  #chat { height: 180px; overflow: auto; border: 1px solid #8884; border-radius: 8px; padding: 8px; background: #f8f8f8; }
-  .msg { margin: 4px 0; }
-  .me { font-weight: bold; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Hex Board Utility (P2P, No Servers)</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <header class="app-header">
+    <h1>Hex Board Utility</h1>
+    <div id="teamBadge">Team: <span id="teamLabel">—</span></div>
+    <div id="alertBadge">Alert: <span id="alertLabel">0</span></div>
+  </header>
 
-<h1>LAN P2P Chat (Short Codes)</h1>
-<div>
-  <button id="hostBtn">Host</button>
-  <button id="playerBtn">Player</button>
-</div>
+  <main class="layout">
+    <section class="panel" id="joinPanel">
+      <h2>Join</h2>
+      <div class="role-row">
+        <button id="gmRoleBtn">Join as GM</button>
+        <button id="playerRoleBtn">Join as Player</button>
+      </div>
 
-<div id="hostPanel" class="panel" style="display:none;">
-  <h2>Host controls</h2>
-  <button id="newOfferBtn">Create offer for new player</button>
-  <div id="hostPeers"></div>
-</div>
+      <div class="webrtc-row">
+        <div class="webrtc-card" id="hostCard">
+          <h3>Host (GM)</h3>
+          <button id="hostBtn">Host</button>
+          <button id="newOfferBtn" disabled>Create offer for new player</button>
+          <div id="hostPeers"></div>
+        </div>
 
-<div id="playerPanel" class="panel" style="display:none;">
-  <h2>Player join</h2>
-  <label>Paste host offer code:</label>
-  <textarea id="offerInput"></textarea>
-  <button id="createAnswerBtn">Create my answer</button>
-  <label>Your answer code (copy this to host):</label>
-  <textarea id="answerOutput" readonly></textarea>
-  <button id="copyAnswerBtn">Copy Answer</button>
-  <button id="finalizeBtn" disabled>Finalize connection</button>
-  <div id="playerStatus">Not connected.</div>
-</div>
+        <div class="webrtc-card" id="playerCard">
+          <h3>Player</h3>
+          <button id="playerBtn">Player</button>
+          <label>Paste host offer code:</label>
+          <textarea id="offerInput" placeholder="Offer code"></textarea>
+          <button id="createAnswerBtn" disabled>Create my answer</button>
+          <label>Your answer code (copy to host):</label>
+          <textarea id="answerOutput" readonly></textarea>
+          <button id="copyAnswerBtn" disabled>Copy Answer</button>
+          <button id="finalizeBtn" disabled>Finalize connection</button>
+          <div id="playerStatus">Not connected.</div>
+        </div>
+      </div>
+    </section>
 
-<div id="chatPanel" class="panel" style="display:none;">
-  <h2>Group chat</h2>
-  <div id="chat"></div>
-  <input id="chatInput" type="text" placeholder="Type a message..." />
-  <button id="sendBtn" disabled>Send</button>
-</div>
+    <section class="board-wrap">
+      <svg id="boardSvg" class="board-svg" aria-label="Hex Board" role="img"></svg>
+    </section>
 
-<!-- Compression library -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <section class="panel" id="controlsPanel">
+      <h2>Controls</h2>
 
-<script>
-function compressSDP(desc) {
-  const sdp = desc.sdp;
-  const compressed = pako.deflate(sdp);
-  return btoa(String.fromCharCode(...compressed))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-function decompressSDP(code, type) {
-  code = code.replace(/-/g, '+').replace(/_/g, '/');
-  const bin = atob(code);
-  const arr = Uint8Array.from(bin, c => c.charCodeAt(0));
-  const sdp = pako.inflate(arr, { to: 'string' });
-  return { type, sdp };
-}
+      <div id="gmControls" class="control-group" hidden>
+        <div class="row">
+          <button id="toggleWallModeBtn">Wall mode: Off</button>
+          <button id="addNoteBtn">Add note</button>
+          <label class="inline">Alert:
+            <input id="alertRange" type="range" min="0" max="5" step="1" value="0" />
+          </label>
+          <button id="checkPlayersBtn">Check for players</button>
+          <button id="saveBtn">Save</button>
+          <input id="loadFile" type="file" accept="application/json" />
+        </div>
+      </div>
 
-function waitForIceGathering(pc) {
-  return new Promise(resolve => {
-    if (pc.iceGatheringState === 'complete') return resolve();
-    pc.addEventListener('icegatheringstatechange', () => {
-      if (pc.iceGatheringState === 'complete') resolve();
+      <div id="playerControls" class="control-group" hidden>
+        <div class="row">
+          <button id="addCharacterBtn">Add character</button>
+          <button id="toggleStealthBtn" disabled>Toggle stealth</button>
+          <button id="changeColorBtn" disabled>Change color</button>
+          <button id="placeTrapBtn">Place trap</button>
+          <button id="checkTrapsBtn">Check for traps</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <button id="sendBtn" disabled>Chat</button>
+        <input id="chatInput" type="text" placeholder="Type a message..." />
+      </div>
+
+      <div id="chat" class="chat-box" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <template id="noteDialogTmpl">
+    <dialog class="note-dialog">
+      <h3>Note</h3>
+      <div class="note-content"></div>
+      <button class="closeNoteBtn">Close</button>
+    </dialog>
+  </template>
+
+  <script type="module">
+    import { Bus } from './js/bus.js';
+    import { setupRTC } from './js/webrtc.js';
+    import { State } from './js/state.js';
+    import { setupBoard } from './js/board.js';
+    import { setupUI } from './js/ui.js';
+    import { Storage } from './js/storage.js';
+
+    const bus = new Bus();
+    const state = new State(bus);
+    const storage = new Storage(bus, state);
+
+    const rtc = setupRTC(bus, state);
+
+    // Team selection
+    const teamLabel = document.getElementById('teamLabel');
+    const alertLabel = document.getElementById('alertLabel');
+
+    let myTeam = null; // 'GM' | 'Players'
+    const gmControls = document.getElementById('gmControls');
+    const playerControls = document.getElementById('playerControls');
+
+    const setTeam = (team) => {
+      myTeam = team;
+      teamLabel.textContent = team;
+      gmControls.hidden = team !== 'GM';
+      playerControls.hidden = team !== 'Players';
+      bus.emit('team:set', { team });
+    };
+
+    document.getElementById('gmRoleBtn').onclick = () => setTeam('GM');
+    document.getElementById('playerRoleBtn').onclick = () => setTeam('Players');
+
+    // Board
+    const svg = document.getElementById('boardSvg');
+    const boardAPI = setupBoard(bus, state, svg);
+
+    // UI
+    setupUI(bus, state, boardAPI);
+
+    // Alert badge updates
+    bus.on('alert:updated', ({ alertLevel }) => {
+      alertLabel.textContent = String(alertLevel);
     });
-    setTimeout(resolve, 3000);
-  });
-}
 
-const peers = new Map();
-const chatEl = document.getElementById('chat');
-const sendBtn = document.getElementById('sendBtn');
-const chatInput = document.getElementById('chatInput');
+    // Initial board
+    state.initializeBoard({ radius: 4 }); // default size; can be changed at runtime
 
-function addChatMessage(sender, text) {
-  const div = document.createElement('div');
-  div.className = 'msg';
-  div.innerHTML = `<span class="${sender === 'Me' ? 'me' : ''}">${sender}:</span> ${text}`;
-  chatEl.appendChild(div);
-  chatEl.scrollTop = chatEl.scrollHeight;
-}
-function broadcast(text) {
-  for (const { dc } of peers.values()) {
-    if (dc && dc.readyState === 'open') {
-      dc.send(JSON.stringify({ type: 'chat', text }));
-    }
-  }
-}
+    // Visibility enforcement after load
+    bus.on('state:loaded', () => {
+      bus.emit('visibility:refresh', { team: myTeam });
+    });
 
-document.getElementById('hostBtn').onclick = () => {
-  document.getElementById('hostPanel').style.display = '';
-  document.getElementById('playerPanel').style.display = 'none';
-  document.getElementById('chatPanel').style.display = '';
-};
-document.getElementById('playerBtn').onclick = () => {
-  document.getElementById('playerPanel').style.display = '';
-  document.getElementById('hostPanel').style.display = 'none';
-  document.getElementById('chatPanel').style.display = '';
-};
-
-sendBtn.onclick = () => {
-  const text = chatInput.value.trim();
-  if (!text) return;
-  addChatMessage('Me', text);
-  broadcast(text);
-  chatInput.value = '';
-};
-
-document.getElementById('newOfferBtn').onclick = async () => {
-  const id = 'p' + Math.random().toString(36).slice(2, 8);
-  const pc = new RTCPeerConnection({ iceServers: [] });
-  const dc = pc.createDataChannel('chat');
-  dc.onopen = () => sendBtn.disabled = false;
-  dc.onmessage = ev => {
-    const msg = JSON.parse(ev.data);
-    if (msg.type === 'chat') addChatMessage(id, msg.text);
-  };
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await waitForIceGathering(pc);
-  const code = compressSDP(pc.localDescription);
-
-  const card = document.createElement('div');
-  card.className = 'peer-card';
-  card.innerHTML = `
-    <strong>Player ${id}</strong><br>
-    Offer code:<br>
-    <textarea readonly>${code}</textarea><br>
-    <button id="copyOffer_${id}">Copy Offer</button><br>
-    Paste Answer:<br>
-    <textarea id="answer_${id}"></textarea><br>
-    <button id="accept_${id}">Accept Answer</button>
-    <div id="status_${id}">Waiting…</div>
-  `;
-  card.querySelector(`#copyOffer_${id}`).onclick = () => {
-    navigator.clipboard.writeText(code);
-    alert('Offer copied!');
-  };
-  card.querySelector(`#accept_${id}`).onclick = async () => {
-    const ansText = card.querySelector(`#answer_${id}`).value.trim();
-    if (!ansText) return;
-    const answerObj = decompressSDP(ansText, "answer");
-    await pc.setRemoteDescription(answerObj);
-    card.querySelector(`#status_${id}`).textContent = 'Connected!';
-  };
-  document.getElementById('hostPeers').appendChild(card);
-  peers.set(id, { pc, dc });
-};
-
-document.getElementById('createAnswerBtn').onclick = async () => {
-  const offerText = document.getElementById('offerInput').value.trim();
-  if (!offerText) return alert('Paste host offer code first.');
-  const offerObj = decompressSDP(offerText, "offer");
-  const pc = new RTCPeerConnection({ iceServers: [] });
-  pc.ondatachannel = ev => {
-    const dc = ev.channel;
-    peers.set('Host', { pc, dc });
-    dc.onopen = () => {
-      document.getElementById('playerStatus').textContent = 'Connected!';
-      sendBtn.disabled = false;
-    };
-    dc.onmessage = ev => {
-      const msg = JSON.parse(ev.data);
-      if (msg.type === 'chat') addChatMessage('Host', msg.text);
-    };
-  };
-  await pc.setRemoteDescription(offerObj);
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  await waitForIceGathering(pc);
-  const code = compressSDP(pc.localDescription);
-  document.getElementById('answerOutput').value = code;
-  document.getElementById('copyAnswerBtn').onclick = () => {
-    navigator.clipboard.writeText(code);
-    alert('Answer copied!');
-  };
-  document.getElementById('finalizeBtn').disabled = false;
-};
-</script>
+    // Connect RTC UI elements
+    rtc.attachUI({
+      hostBtn: document.getElementById('hostBtn'),
+      playerBtn: document.getElementById('playerBtn'),
+      newOfferBtn: document.getElementById('newOfferBtn'),
+      hostPeers: document.getElementById('hostPeers'),
+      offerInput: document.getElementById('offerInput'),
+      createAnswerBtn: document.getElementById('createAnswerBtn'),
+      answerOutput: document.getElementById('answerOutput'),
+      copyAnswerBtn: document.getElementById('copyAnswerBtn'),
+      finalizeBtn: document.getElementById('finalizeBtn'),
+      playerStatus: document.getElementById('playerStatus'),
+      chatEl: document.getElementById('chat'),
+      sendBtn: document.getElementById('sendBtn'),
+      chatInput: document.getElementById('chatInput'),
+    });
+  </script>
 </body>
 </html>
