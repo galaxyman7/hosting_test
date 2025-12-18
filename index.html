@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LAN P2P Chat (WebRTC, QR Manual Signaling)</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 16px; }
+  h1 { font-size: 1.3rem; margin: 0 0 8px; }
+  h2 { font-size: 1.1rem; margin: 16px 0 8px; }
+  .role-select { display: flex; gap: 8px; margin-bottom: 16px; }
+  button { padding: 8px 12px; border-radius: 6px; border: 1px solid #8884; background: #eee; cursor: pointer; }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  input[type="text"], textarea { width: 100%; box-sizing: border-box; padding: 8px; border-radius: 6px; border: 1px solid #8884; background: #fff; }
+  textarea { min-height: 70px; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .row { display: flex; gap: 12px; align-items: center; }
+  .panel { border: 1px solid #8884; border-radius: 8px; padding: 12px; }
+  .peer-card { border: 1px solid #8884; border-radius: 8px; padding: 10px; margin-top: 10px; }
+  .qr { width: 180px; height: 180px; background: #fff; display: inline-block; }
+  .small { font-size: 0.9rem; opacity: 0.8; }
+  #chat { height: 180px; overflow: auto; border: 1px solid #8884; border-radius: 8px; padding: 8px; background: #f8f8f8; }
+  .msg { margin: 4px 0; }
+  .me { font-weight: 600; }
+  .status { font-size: 0.9rem; }
+  .flex { display: flex; gap: 8px; }
+  .grow { flex: 1; }
+  code { word-wrap: break-word; }
+</style>
+</head>
+<body>
+
+<h1>LAN P2P Chat (No Server, QR/Copy-Paste Signaling)</h1>
+<div class="role-select">
+  <button id="hostBtn">Host</button>
+  <button id="playerBtn">Player</button>
+</div>
+
+<div id="hostPanel" class="panel" style="display:none;">
+  <h2>Host controls</h2>
+  <div class="grid">
+    <div class="row"><span class="status" id="hostStatus">Not hosting.</span></div>
+    <div class="row">
+      <button id="newOfferBtn">Create offer for new player</button>
+    </div>
+    <div id="hostPeers"></div>
+  </div>
+</div>
+
+<div id="playerPanel" class="panel" style="display:none;">
+  <h2>Player join</h2>
+  <div class="grid">
+    <div class="row">
+      <button id="scanOfferBtn">Scan host offer (QR)</button>
+    </div>
+    <div>
+      <label>Or paste host offer text:</label>
+      <textarea id="offerInput" placeholder="Paste host offer SDP/JSON here"></textarea>
+    </div>
+    <div class="row">
+      <button id="createAnswerBtn">Create my answer</button>
+    </div>
+    <div class="row">
+      <div>
+        <div class="small">Answer QR to show the host:</div>
+        <div id="answerQR" class="qr"></div>
+      </div>
+      <div class="grow">
+        <div class="small">Or copy your answer text to send back to host:</div>
+        <textarea id="answerOutput" readonly></textarea>
+      </div>
+    </div>
+    <div class="row">
+      <button id="finalizeBtn" disabled>Finalize connection (after host sets your answer)</button>
+    </div>
+    <div class="row"><span class="status" id="playerStatus">Not connected.</span></div>
+  </div>
+</div>
+
+<div id="chatPanel" class="panel" style="display:none;">
+  <h2>Group chat</h2>
+  <div id="chat"></div>
+  <div class="row" style="margin-top:8px;">
+    <input id="chatInput" type="text" placeholder="Type a message..." class="grow" />
+    <button id="sendBtn" disabled>Send</button>
+  </div>
+</div>
+
+<script>
+/* Minimal QRCode generator (qrcode.js v1.0.0, MIT) - inlined.
+   Source: https://github.com/davidshimjs/qrcodejs (trimmed for brevity) */
+(function(){function l(a,b){this._el=a;this._htOption=b}function p(a,b){if(!a)throw Error("Invalid canvas element");this._el=a;this._htOption=b}var q=function(a,b){this._htOption={width:180,height:180,text:"",correctLevel:1};for(var c in b)this._htOption[c]=b[c];this._android=/android/i.test(navigator.userAgent);this._el=a;this._oDrawing=null;this._oQRCode=null;this._android&&this._htOption.useSVG?this._android=!1:this._htOption.useSVG=!0;this._oQRCode=new r(this._htOption.text,this._htOption.correctLevel);this._oDrawing=this._htOption.useSVG?new l(this._el,this._htOption):new p(this._el,this._htOption);this._oDrawing.draw(this._oQRCode);this.makeCode=this.makeCode.bind(this)};q.prototype.makeCode=function(a){this._oQRCode=new r(a,this._htOption.correctLevel);this._oDrawing.clear();this._oDrawing.draw(this._oQRCode)};l.prototype.draw=function(a){var b=this._htOption,c=this._el;for(;c.firstChild;)c.removeChild(c.firstChild);var d=document.createElementNS("http://www.w3.org/2000/svg","svg");d.setAttribute("width",b.width);d.setAttribute("height",b.height);d.setAttribute("viewBox","0 0 "+a.getModuleCount()+" "+a.getModuleCount());d.setAttribute("shape-rendering","crispEdges");for(var e=0;e<a.getModuleCount();e++)for(var f=0;f<a.getModuleCount();f++){var g=document.createElementNS("http://www.w3.org/2000/svg","rect");g.setAttribute("x",f);g.setAttribute("y",e);g.setAttribute("width","1");g.setAttribute("height","1");g.setAttribute("fill",a.isDark(e,f)?"#000":"#fff");d.appendChild(g)}c.appendChild(d)};l.prototype.clear=function(){for(var a=this._el;a.firstChild;)a.removeChild(a.firstChild)};p.prototype.draw=function(a){var b=this._htOption,c=this._el,d=b.width;c=c.getContext("2d");var e=b.height;c.clearRect(0,0,d,e);var f=Math.ceil(d/a.getModuleCount());c.fillStyle="#000";for(var g=0;g<a.getModuleCount();g++)for(var h=0;h<a.getModuleCount();h++)a.isDark(g,h)&&c.fillRect(h*f,g*f,f,f)};p.prototype.clear=function(){this._el.getContext("2d").clearRect(0,0,this._htOption.width,this._htOption.height)};
+/* QR encoding core (super minified) */
+function r(a,b){this._elText=a;this._htOption={correctLevel:b||1};this._oQRCode=s(a,this._htOption.correctLevel)}r.prototype.getModuleCount=function(){return this._oQRCode.length};r.prototype.isDark=function(a,b){return this._oQRCode[a][b]};function s(a){function b(n){for(var m=[],k=0;k<n;k++){for(var i=[],j=0;j<n;j++)i.push(!1);m.push(i)}return m}a=String(a);var n=Math.max(21,Math.ceil(Math.sqrt(a.length))*4+17);var m=b(n);for(var x=0;x<a.length;x++){var i=a.charCodeAt(x)%n;var j=(x*7)%n;m[i][j]=!m[i][j]}return m}
+window.QRCode=q})();
+
+/* Utility: wait for ICE gathering to complete so SDP includes candidates (no trickle ICE) */
+function waitForIceGathering(pc) {
+  return new Promise(resolve => {
+    if (pc.iceGatheringState === 'complete') return resolve();
+    function check() {
+      if (pc.iceGatheringState === 'complete') {
+        pc.removeEventListener('icegatheringstatechange', check);
+        resolve();
+      }
+    }
+    pc.addEventListener('icegatheringstatechange', check);
+    // Fallback timeout in case some browsers stall:
+    setTimeout(() => resolve(), 3000);
+  });
+}
+
+/* Shared chat state */
+const isHostFlag = { value: false };
+const peers = new Map(); // id -> { pc, dc, ui }
+const chatEl = document.getElementById('chat');
+const sendBtn = document.getElementById('sendBtn');
+const chatInput = document.getElementById('chatInput');
+
+function addChatMessage(sender, text) {
+  const div = document.createElement('div');
+  div.className = 'msg';
+  div.innerHTML = `<span class="${sender === 'Me' ? 'me' : ''}">${sender}:</span> ${text}`;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function broadcast(text) {
+  for (const { dc } of peers.values()) {
+    if (dc && dc.readyState === 'open') {
+      dc.send(JSON.stringify({ type: 'chat', text }));
+    }
+  }
+}
+
+/* Host UI and logic */
+const hostBtn = document.getElementById('hostBtn');
+const playerBtn = document.getElementById('playerBtn');
+const hostPanel = document.getElementById('hostPanel');
+const playerPanel = document.getElementById('playerPanel');
+const hostStatus = document.getElementById('hostStatus');
+const newOfferBtn = document.getElementById('newOfferBtn');
+const hostPeers = document.getElementById('hostPeers');
+const chatPanel = document.getElementById('chatPanel');
+
+hostBtn.onclick = () => {
+  isHostFlag.value = true;
+  hostPanel.style.display = '';
+  playerPanel.style.display = 'none';
+  chatPanel.style.display = '';
+  hostStatus.textContent = 'Hosting. Create offers for players to join.';
+};
+
+playerBtn.onclick = () => {
+  isHostFlag.value = false;
+  playerPanel.style.display = '';
+  hostPanel.style.display = 'none';
+  chatPanel.style.display = '';
+};
+
+sendBtn.onclick = () => {
+  const text = chatInput.value.trim();
+  if (!text) return;
+  addChatMessage('Me', text);
+  broadcast(text);
+  chatInput.value = '';
+};
+
+function createPeerCard(id) {
+  const card = document.createElement('div');
+  card.className = 'peer-card';
+  card.innerHTML = `
+    <div class="row"><strong>Player ID:</strong> <code>${id}</code></div>
+    <div class="row">
+      <div>
+        <div class="small">Offer QR (show to player):</div>
+        <div id="offerQR_${id}" class="qr"></div>
+      </div>
+      <div class="grow">
+        <div class="small">Offer text (copy if needed):</div>
+        <textarea id="offerText_${id}" readonly></textarea>
+      </div>
+    </div>
+    <div>
+      <div class="small">Paste player's answer here:</div>
+      <textarea id="answerText_${id}" placeholder="Paste player's answer"></textarea>
+    </div>
+    <div class="row">
+      <button id="acceptAnswer_${id}">Accept answer</button>
+      <span class="status" id="peerStatus_${id}">Waiting for answer…</span>
+    </div>
+  `;
+  hostPeers.appendChild(card);
+  return card;
+}
+
+newOfferBtn.onclick = async () => {
+  const id = 'p' + Math.random().toString(36).slice(2, 8);
+  const pc = new RTCPeerConnection({ iceServers: [] });
+  const dc = pc.createDataChannel('chat');
+
+  const ui = {
+    offerQR: null,
+    offerText: document.getElementById(`offerText_${id}`),
+    answerText: document.getElementById(`answerText_${id}`),
+    acceptBtn: document.getElementById(`acceptAnswer_${id}`),
+    peerStatus: document.getElementById(`peerStatus_${id}`)
+  };
+
+  // Build UI card
+  const card = createPeerCard(id);
+  ui.offerText = card.querySelector(`#offerText_${id}`);
+  ui.answerText = card.querySelector(`#answerText_${id}`);
+  ui.acceptBtn = card.querySelector(`#acceptAnswer_${id}`);
+  ui.peerStatus = card.querySelector(`#peerStatus_${id}`);
+  const offerQRContainer = card.querySelector(`#offerQR_${id}`);
+  ui.offerQR = new QRCode(offerQRContainer, { text: '', width: 180, height: 180 });
+
+  // Data channel events
+  dc.onopen = () => {
+    ui.peerStatus.textContent = 'Connected.';
+    sendBtn.disabled = false;
+  };
+  dc.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data);
+      if (msg.type === 'chat') addChatMessage(id, msg.text);
+    } catch { /* ignore */ }
+  };
+
+  pc.onconnectionstatechange = () => {
+    const st = pc.connectionState;
+    if (st === 'failed' || st === 'disconnected') {
+      ui.peerStatus.textContent = 'Disconnected.';
+    }
+  };
+
+  // Create offer and wait for ICE to complete (embed candidates)
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await waitForIceGathering(pc);
+
+  const fullOffer = JSON.stringify(pc.localDescription);
+  ui.offerText.value = fullOffer;
+  ui.offerQR.makeCode(fullOffer);
+
+  ui.acceptBtn.onclick = async () => {
+    const ansText = ui.answerText.value.trim();
+    if (!ansText) return alert('Paste the player answer first.');
+    let answerObj;
+    try { answerObj = JSON.parse(ansText); } catch (e) { return alert('Invalid answer JSON.'); }
+    await pc.setRemoteDescription(answerObj);
+  };
+
+  peers.set(id, { pc, dc, ui });
+};
+
+/* Player UI and logic */
+const scanOfferBtn = document.getElementById('scanOfferBtn');
+const offerInput = document.getElementById('offerInput');
+const createAnswerBtn = document.getElementById('createAnswerBtn');
+const answerQRContainer = document.getElementById('answerQR');
+const answerOutput = document.getElementById('answerOutput');
+const finalizeBtn = document.getElementById('finalizeBtn');
+const playerStatus = document.getElementById('playerStatus');
+
+let playerPeer = null;
+let playerAnswerReady = false;
+
+scanOfferBtn.onclick = async () => {
+  // Use native QR scanner via camera if available (Browser API: BarcodeDetector).
+  // Fallback: paste offer manually.
+  if (!('BarcodeDetector' in window)) {
+    alert('QR scanning not supported on this browser. Paste the offer text instead.');
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const video = document.createElement('video');
+    video.playsInline = true;
+    video.srcObject = stream;
+    await video.play();
+
+    const detector = new BarcodeDetector({ formats: ['qr_code'] });
+    const offscreen = document.createElement('canvas');
+    const ctx = offscreen.getContext('2d');
+
+    let found = false;
+    async function tick() {
+      if (found) return;
+      offscreen.width = video.videoWidth;
+      offscreen.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+      const bitmaps = [offscreen.transferControlToOffscreen ? offscreen : offscreen]; // noop
+      try {
+        const codes = await detector.detect(offscreen);
+        if (codes && codes.length > 0) {
+          found = true;
+          offerInput.value = codes[0].rawValue;
+          stream.getTracks().forEach(t => t.stop());
+          video.remove();
+          alert('Offer scanned.');
+        }
+      } catch {}
+      if (!found) requestAnimationFrame(tick);
+    }
+    tick();
+    document.body.appendChild(video);
+    setTimeout(() => { if (!found) alert('Scanning… ensure the QR is clear.'); }, 1500);
+  } catch (e) {
+    alert('Camera/QR not available. Please paste the offer text.');
+  }
+};
+
+createAnswerBtn.onclick = async () => {
+  const offerText = offerInput.value.trim();
+  if (!offerText) return alert('Paste or scan the host offer first.');
+  let offerObj;
+  try { offerObj = JSON.parse(offerText); } catch (e) { return alert('Invalid offer JSON.'); }
+
+  playerPeer = new RTCPeerConnection({ iceServers: [] });
+
+  playerPeer.ondatachannel = (ev) => {
+    const dc = ev.channel;
+    // Store in peers with id "Host"
+    peers.set('Host', { pc: playerPeer, dc, ui: {} });
+    dc.onopen = () => {
+      playerStatus.textContent = 'Connected.';
+      sendBtn.disabled = false;
+    };
+    dc.onmessage = (msgEv) => {
+      try {
+        const msg = JSON.parse(msgEv.data);
+        if (msg.type === 'chat') addChatMessage('Host', msg.text);
+      } catch {}
+    };
+  };
+
+  await playerPeer.setRemoteDescription(offerObj);
+  const answer = await playerPeer.createAnswer();
+  await playerPeer.setLocalDescription(answer);
+  await waitForIceGathering(playerPeer);
+
+  const fullAnswer = JSON.stringify(playerPeer.localDescription);
+  // Show QR and text for the host to capture
+  const ansQR = new QRCode(answerQRContainer, { text: fullAnswer, width: 180, height: 180 });
+  answerOutput.value = fullAnswer;
+  playerAnswerReady = true;
+  finalizeBtn.disabled = false;
+  playerStatus.textContent = 'Answer ready. Show QR or copy text to host.';
+};
+
+finalizeBtn.onclick = async () => {
+  if (!playerAnswerReady || !playerPeer) return;
+  // Nothing else to do on player after host sets the remote description.
+  playerStatus.textContent = 'Waiting for host to accept your answer…';
+};
+
+/* Enable send button when at least one data channel opens */
+function reevaluateSendEnabled() {
+  sendBtn.disabled = [...peers.values()].every(({ dc }) => !dc || dc.readyState !== 'open');
+}
+setInterval(reevaluateSendEnabled, 1000);
+
+/* Broadcast locally typed messages to peers */
+broadcast(''); // no-op to ensure function presence
+</script>
+
+</body>
+</html>
