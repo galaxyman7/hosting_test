@@ -1,219 +1,371 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>P2P Hex Board</title>
+<meta charset="UTF-8">
+<title>Hex Board – Up to 8 Players</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
-  body { font-family: sans-serif; margin: 0; padding: 20px; background: #f4f4f9; }
-  .panel { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-  button { padding: 8px 15px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background: #fff; }
-  button:hover { background: #eee; }
-  textarea { width: 100%; height: 100px; margin: 10px 0; font-family: monospace; font-size: 11px; }
-  #boardContainer { display: flex; justify-content: center; background: #ddd; padding: 10px; border-radius: 8px; }
-  .edge { stroke: #999; stroke-width: 3; cursor: pointer; transition: 0.2s; }
-  .edge:hover { stroke: #666; stroke-width: 5; }
-  .edge.active { stroke: #ff4757; stroke-width: 6; }
-  .hex-cell { fill: #fff; stroke: #eee; }
-  #chat { height: 100px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; }
-  .hidden { display: none; }
+body {
+  font-family: sans-serif;
+  background:#f4f4f9;
+  padding:20px;
+  margin:0;
+}
+
+.panel {
+  background:#fff;
+  padding:15px;
+  border-radius:8px;
+  margin-bottom:15px;
+  box-shadow:0 2px 5px rgba(0,0,0,.1);
+}
+
+button {
+  padding:6px 12px;
+  cursor:pointer;
+  margin-bottom:6px;
+}
+
+textarea {
+  width:100%;
+  height:90px;
+  font-family:monospace;
+  font-size:11px;
+  margin-bottom:6px;
+}
+
+.copy-btn {
+  font-size:12px;
+}
+
+#boardContainer {
+  background:#ddd;
+  padding:10px;
+  border-radius:8px;
+}
+
+.edge {
+  stroke:#999;
+  stroke-width:3;
+  pointer-events:none;
+  transition:.2s;
+}
+
+.edge.active {
+  stroke:#ff4757;
+  stroke-width:6;
+}
+
+.edge-hitbox {
+  stroke:transparent;
+  stroke-width:18;
+  cursor:pointer;
+}
+
+#chat {
+  height:120px;
+  overflow-y:auto;
+  border:1px solid #ccc;
+  padding:8px;
+  margin-bottom:6px;
+  background:#fafafa;
+}
+
+.hidden { display:none; }
 </style>
 </head>
+
 <body>
 
-<h1>Hex Board & P2P Chat</h1>
+<h2>Hex Board (Up to 8 Players)</h2>
 
-<div id="setupMode">
-  <button onclick="startHost()">Host a Room</button>
-  <button onclick="startPlayer()">Join a Room</button>
+<div id="setup">
+  <button onclick="startHost()">Host Game</button>
+  <button onclick="startPlayer()">Join Game</button>
 </div>
 
+<!-- HOST PANEL -->
 <div id="hostPanel" class="panel hidden">
-  <h2>Host Setup</h2>
-  <p>1. Copy this Offer Code and send it to the player:</p>
+  <h3>Host</h3>
+
+  <p><strong>1) Generate Offer (send to one player)</strong></p>
   <textarea id="hostOffer" readonly></textarea>
-  <p>2. Paste the Player's Answer Code here:</p>
-  <textarea id="hostAnswerInput" placeholder="Paste answer here..."></textarea>
-  <button onclick="hostAcceptAnswer()">Connect to Player</button>
-  <div id="hostStatus">Status: Waiting for player...</div>
+  <button class="copy-btn" onclick="copyText('hostOffer', this)">📋 Copy Offer</button>
+  <button onclick="generateOffer()">Generate Offer</button>
+
+  <p><strong>2) Paste Player Answer</strong></p>
+  <textarea id="hostAnswer"></textarea>
+  <button onclick="finalizePlayer()">Finalize Player</button>
+
+  <div id="hostStatus"></div>
 </div>
 
+<!-- PLAYER PANEL -->
 <div id="playerPanel" class="panel hidden">
-  <h2>Player Setup</h2>
-  <p>1. Paste the Host's Offer Code here:</p>
-  <textarea id="playerOfferInput" placeholder="Paste offer here..."></textarea>
-  <button onclick="playerCreateAnswer()">Generate Answer Code</button>
-  <p>2. Copy this Answer Code and send it to the Host:</p>
-  <textarea id="playerAnswerOutput" readonly></textarea>
-  <div id="playerStatus">Status: Not connected</div>
+  <h3>Player</h3>
+
+  <p><strong>1) Paste Host Offer</strong></p>
+  <textarea id="playerOffer"></textarea>
+  <button onclick="createAnswer()">Create Answer</button>
+
+  <p><strong>2) Send this Answer back to Host</strong></p>
+  <textarea id="playerAnswer" readonly></textarea>
+  <button class="copy-btn" onclick="copyText('playerAnswer', this)">📋 Copy Answer</button>
 </div>
 
-<div id="gameArea" class="hidden">
-  <div class="panel">
-    <h3>Shared Board</h3>
-    <div id="boardContainer">
-      <svg id="hexSvg" width="400" height="400" viewBox="0 0 400 400"></svg>
-    </div>
-    <p id="hint" style="font-size: 12px; color: #666;"></p>
+<!-- GAME -->
+<div id="game" class="panel hidden">
+  <h3>Board</h3>
+  <div id="boardContainer">
+    <svg id="hexSvg" width="400" height="400"></svg>
   </div>
+</div>
 
-  <div class="panel">
-    <h3>Chat</h3>
-    <div id="chat"></div>
-    <input type="text" id="chatInput" placeholder="Type message..." style="width: 70%">
-    <button onclick="sendChat()">Send</button>
-  </div>
+<div id="chatPanel" class="panel hidden">
+  <h3>Chat</h3>
+  <div id="chat"></div>
+  <input id="chatInput" style="width:75%" placeholder="Type message...">
+  <button onclick="sendChat()">Send</button>
 </div>
 
 <script>
-let pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
-let dc;
+/* =================== STATE =================== */
+const MAX_PLAYERS = 8;
 let isHost = false;
-const activeEdges = new Set();
+let peerCounter = 0;
+let pendingPeerId = null;
 
-// --- HOST LOGIC ---
-async function startHost() {
+const peers = new Map(); // peerId -> { pc, dc }
+const activeEdges = new Set();
+let playerPC = null;
+let playerDC = null;
+
+/* =================== UTIL =================== */
+function copyText(id, btn){
+  navigator.clipboard.writeText(document.getElementById(id).value);
+  const t = btn.innerText;
+  btn.innerText = "✔ Copied";
+  setTimeout(()=>btn.innerText=t, 1000);
+}
+
+function logChat(sender, text){
+  const d = document.createElement('div');
+  d.textContent = sender + ": " + text;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+/* =================== HOST =================== */
+function startHost(){
   isHost = true;
-  document.getElementById('setupMode').classList.add('hidden');
-  document.getElementById('hostPanel').classList.remove('hidden');
-  document.getElementById('gameArea').classList.remove('hidden');
-  document.getElementById('hint').innerText = "Host: Click edges to bold them for everyone.";
-  
-  dc = pc.createDataChannel("chat");
-  setupDataChannel(dc);
+  setup.classList.add('hidden');
+  hostPanel.classList.remove('hidden');
+  game.classList.remove('hidden');
+  chatPanel.classList.remove('hidden');
+  initBoard();
+  updateHostStatus();
+}
+
+async function generateOffer(){
+  if(peers.size >= MAX_PLAYERS){
+    alert("Max players reached");
+    return;
+  }
+
+  const peerId = ++peerCounter;
+  pendingPeerId = peerId;
+
+  const pc = new RTCPeerConnection({
+    iceServers:[{urls:"stun:stun.l.google.com:19302"}]
+  });
+
+  const dc = pc.createDataChannel("data");
+  peers.set(peerId, { pc, dc });
+  setupDataChannel(peerId, dc);
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  pc.onicecandidate = (e) => {
-    if (!e.candidate) { // Wait for all ICE candidates
-      document.getElementById('hostOffer').value = btoa(pc.localDescription.sdp);
+  pc.onicecandidate = e=>{
+    if(!e.candidate){
+      hostOffer.value = btoa(pc.localDescription.sdp);
     }
   };
+
+  updateHostStatus();
+}
+
+async function finalizePlayer(){
+  if(!pendingPeerId){
+    alert("Generate an offer first");
+    return;
+  }
+
+  const peer = peers.get(pendingPeerId);
+  if(!peer) return;
+
+  const answerSdp = atob(hostAnswer.value.trim());
+  await peer.pc.setRemoteDescription({
+    type:'answer',
+    sdp:answerSdp
+  });
+
+  hostAnswer.value = "";
+  pendingPeerId = null;
+}
+
+/* =================== PLAYER =================== */
+function startPlayer(){
+  setup.classList.add('hidden');
+  playerPanel.classList.remove('hidden');
+  game.classList.remove('hidden');
+  chatPanel.classList.remove('hidden');
   initBoard();
-}
 
-async function hostAcceptAnswer() {
-  const ansSdp = atob(document.getElementById('hostAnswerInput').value.trim());
-  await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: ansSdp }));
-}
+  playerPC = new RTCPeerConnection({
+    iceServers:[{urls:"stun:stun.l.google.com:19302"}]
+  });
 
-// --- PLAYER LOGIC ---
-function startPlayer() {
-  isHost = false;
-  document.getElementById('setupMode').classList.add('hidden');
-  document.getElementById('playerPanel').classList.remove('hidden');
-  document.getElementById('gameArea').classList.remove('hidden');
-  document.getElementById('hint').innerText = "Player: Wait for the host to update the board.";
-  
-  pc.ondatachannel = (e) => {
-    dc = e.channel;
-    setupDataChannel(dc);
+  playerPC.ondatachannel = e=>{
+    playerDC = e.channel;
+    setupDataChannel("host", playerDC);
   };
-  initBoard();
 }
 
-async function playerCreateAnswer() {
-  const offerSdp = atob(document.getElementById('playerOfferInput').value.trim());
-  await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: offerSdp }));
-  
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
+async function createAnswer(){
+  const sdp = atob(playerOffer.value.trim());
+  await playerPC.setRemoteDescription({ type:'offer', sdp });
 
-  pc.onicecandidate = (e) => {
-    if (!e.candidate) {
-      document.getElementById('playerAnswerOutput').value = btoa(pc.localDescription.sdp);
+  const ans = await playerPC.createAnswer();
+  await playerPC.setLocalDescription(ans);
+
+  playerPC.onicecandidate = e=>{
+    if(!e.candidate){
+      playerAnswer.value = btoa(playerPC.localDescription.sdp);
     }
   };
 }
 
-// --- SHARED LOGIC ---
-function setupDataChannel(channel) {
-  channel.onopen = () => {
-    const status = isHost ? 'hostStatus' : 'playerStatus';
-    document.getElementById(status).innerText = "Status: Connected!";
-    document.getElementById(status).style.color = "green";
+/* =================== DATA CHANNEL =================== */
+function setupDataChannel(peerId, dc){
+  dc.onopen = ()=>{
+    if(isHost){
+      dc.send(JSON.stringify({
+        type:'sync',
+        edges:[...activeEdges]
+      }));
+      logChat("System","Player connected");
+    }
   };
-  channel.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    if (data.type === 'chat') addChat("Peer", data.msg);
-    if (data.type === 'edge') toggleEdge(data.id);
+
+  dc.onmessage = e=>{
+    const msg = JSON.parse(e.data);
+
+    if(msg.type === 'edge'){
+      toggleEdge(msg.id, false);
+      if(isHost) broadcast({ type:'edge', id:msg.id }, peerId);
+    }
+
+    if(msg.type === 'sync'){
+      msg.edges.forEach(id=>toggleEdge(id,false));
+    }
+
+    if(msg.type === 'chat'){
+      logChat(msg.from, msg.text);
+      if(isHost) broadcast(msg, peerId);
+    }
   };
 }
 
-function sendChat() {
-  const input = document.getElementById('chatInput');
-  const msg = input.value;
-  if (dc && dc.readyState === "open") {
-    dc.send(JSON.stringify({ type: 'chat', msg: msg }));
-    addChat("Me", msg);
-    input.value = "";
+function broadcast(data, except=null){
+  peers.forEach((p,id)=>{
+    if(id === except) return;
+    if(p.dc.readyState === "open"){
+      p.dc.send(JSON.stringify(data));
+    }
+  });
+}
+
+/* =================== CHAT =================== */
+function sendChat(){
+  const text = chatInput.value.trim();
+  if(!text) return;
+
+  logChat("Me", text);
+
+  if(isHost){
+    broadcast({ type:'chat', from:'Host', text });
+  }else if(playerDC && playerDC.readyState === "open"){
+    playerDC.send(JSON.stringify({ type:'chat', from:'Player', text }));
+  }
+
+  chatInput.value = "";
+}
+
+/* =================== BOARD =================== */
+function initBoard(){
+  const svg = hexSvg;
+  svg.innerHTML = "";
+  const size=20, cx=200, cy=200;
+
+  for(let q=-4;q<=4;q++)for(let r=-4;r<=4;r++){
+    if(Math.abs(q+r)>4) continue;
+
+    const x=cx+size*1.5*q;
+    const y=cy+size*(Math.sqrt(3)/2*q+Math.sqrt(3)*r);
+    const pts=[...Array(6)].map((_,i)=>{
+      const a=Math.PI/3*i;
+      return {x:x+size*Math.cos(a),y:y+size*Math.sin(a)};
+    });
+
+    pts.forEach((p,i)=>{
+      const p2=pts[(i+1)%6];
+      const id=[p.x,p.y,p2.x,p2.y].map(n=>Math.round(n)).sort().join('_');
+      if(document.getElementById(id)) return;
+
+      const e=document.createElementNS(svg.namespaceURI,"line");
+      e.id=id;
+      e.setAttribute("x1",p.x);
+      e.setAttribute("y1",p.y);
+      e.setAttribute("x2",p2.x);
+      e.setAttribute("y2",p2.y);
+      e.setAttribute("class","edge");
+
+      const h=document.createElementNS(svg.namespaceURI,"line");
+      h.setAttribute("x1",p.x);
+      h.setAttribute("y1",p.y);
+      h.setAttribute("x2",p2.x);
+      h.setAttribute("y2",p2.y);
+      h.setAttribute("class","edge-hitbox");
+      h.onclick=()=>{
+        if(!isHost) return;
+        toggleEdge(id,true);
+      };
+
+      svg.appendChild(e);
+      svg.appendChild(h);
+    });
   }
 }
 
-function addChat(sender, msg) {
-  const div = document.createElement('div');
-  div.innerText = sender + ": " + msg;
-  document.getElementById('chat').appendChild(div);
-}
-
-// --- BOARD LOGIC ---
-function initBoard() {
-  const svg = document.getElementById('hexSvg');
-  const radius = 6, size = 20, centerX = 200, centerY = 200;
-
-  for (let q = -5; q <= 5; q++) {
-    for (let r = -5; r <= 5; r++) {
-      if (Math.abs(q + r) <= 5) {
-        const x = centerX + size * (3/2 * q);
-        const y = centerY + size * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
-        
-        // Draw Hex
-        const points = [];
-        for (let i = 0; i < 6; i++) {
-          const a = (Math.PI / 3) * i;
-          points.push({ x: x + size * Math.cos(a), y: y + size * Math.sin(a) });
-        }
-        
-        const poly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-        poly.setAttribute("points", points.map(p => p.x + "," + p.y).join(" "));
-        poly.setAttribute("class", "hex-cell");
-        svg.appendChild(poly);
-
-        // Draw Edges
-        for (let i = 0; i < 6; i++) {
-          const p1 = points[i], p2 = points[(i + 1) % 6];
-          const id = [Math.round(p1.x), Math.round(p1.y), Math.round(p2.x), Math.round(p2.y)].sort().join('_');
-          if (!document.getElementById(id)) {
-            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-            line.setAttribute("x1", p1.x); line.setAttribute("y1", p1.y);
-            line.setAttribute("x2", p2.x); line.setAttribute("y2", p2.y);
-            line.setAttribute("class", "edge");
-            line.setAttribute("id", id);
-            line.onclick = () => {
-              if (isHost && dc && dc.readyState === "open") {
-                toggleEdge(id);
-                dc.send(JSON.stringify({ type: 'edge', id: id }));
-              }
-            };
-            svg.appendChild(line);
-          }
-        }
-      }
-    }
-  }
-}
-
-function toggleEdge(id) {
-  const el = document.getElementById(id);
-  if (activeEdges.has(id)) {
+function toggleEdge(id, broadcastIt){
+  const el=document.getElementById(id);
+  if(activeEdges.has(id)){
     activeEdges.delete(id);
     el.classList.remove('active');
-  } else {
+  }else{
     activeEdges.add(id);
     el.classList.add('active');
   }
+  if(broadcastIt) broadcast({ type:'edge', id });
+}
+
+/* =================== UI =================== */
+function updateHostStatus(){
+  hostStatus.textContent = `Players: ${peers.size}/${MAX_PLAYERS}`;
 }
 </script>
+
 </body>
 </html>
