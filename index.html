@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>LAN P2P Chat (Compressed Copy/Paste Signaling)</title>
+<title>LAN P2P Chat (Short Codes)</title>
 <style>
   body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; }
   h1 { font-size: 1.3rem; margin-bottom: 8px; }
@@ -19,7 +19,7 @@
 </head>
 <body>
 
-<h1>LAN P2P Chat (Compressed Copy/Paste)</h1>
+<h1>LAN P2P Chat (Short Codes)</h1>
 <div>
   <button id="hostBtn">Host</button>
   <button id="playerBtn">Player</button>
@@ -54,16 +54,18 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
 
 <script>
-function compress(obj) {
-  const str = JSON.stringify(obj);
-  const compressed = pako.deflate(str);
-  return btoa(String.fromCharCode(...compressed));
+function compressSDP(desc) {
+  const sdp = desc.sdp;
+  const compressed = pako.deflate(sdp);
+  return btoa(String.fromCharCode(...compressed))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-function decompress(str) {
-  const bin = atob(str);
+function decompressSDP(code, type) {
+  code = code.replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(code);
   const arr = Uint8Array.from(bin, c => c.charCodeAt(0));
-  const decompressed = pako.inflate(arr, { to: 'string' });
-  return JSON.parse(decompressed);
+  const sdp = pako.inflate(arr, { to: 'string' });
+  return { type, sdp };
 }
 
 function waitForIceGathering(pc) {
@@ -127,7 +129,7 @@ document.getElementById('newOfferBtn').onclick = async () => {
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   await waitForIceGathering(pc);
-  const code = compress(pc.localDescription);
+  const code = compressSDP(pc.localDescription);
 
   const card = document.createElement('div');
   card.className = 'peer-card';
@@ -135,20 +137,20 @@ document.getElementById('newOfferBtn').onclick = async () => {
     <strong>Player ${id}</strong><br>
     Offer code:<br>
     <textarea readonly>${code}</textarea><br>
-    <button>Copy Offer</button><br>
+    <button id="copyOffer_${id}">Copy Offer</button><br>
     Paste Answer:<br>
     <textarea id="answer_${id}"></textarea><br>
     <button id="accept_${id}">Accept Answer</button>
     <div id="status_${id}">Waiting…</div>
   `;
-  card.querySelector('button').onclick = () => {
+  card.querySelector(`#copyOffer_${id}`).onclick = () => {
     navigator.clipboard.writeText(code);
     alert('Offer copied!');
   };
   card.querySelector(`#accept_${id}`).onclick = async () => {
     const ansText = card.querySelector(`#answer_${id}`).value.trim();
     if (!ansText) return;
-    const answerObj = decompress(ansText);
+    const answerObj = decompressSDP(ansText, "answer");
     await pc.setRemoteDescription(answerObj);
     card.querySelector(`#status_${id}`).textContent = 'Connected!';
   };
@@ -159,7 +161,7 @@ document.getElementById('newOfferBtn').onclick = async () => {
 document.getElementById('createAnswerBtn').onclick = async () => {
   const offerText = document.getElementById('offerInput').value.trim();
   if (!offerText) return alert('Paste host offer code first.');
-  const offerObj = decompress(offerText);
+  const offerObj = decompressSDP(offerText, "offer");
   const pc = new RTCPeerConnection({ iceServers: [] });
   pc.ondatachannel = ev => {
     const dc = ev.channel;
@@ -177,7 +179,7 @@ document.getElementById('createAnswerBtn').onclick = async () => {
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
   await waitForIceGathering(pc);
-  const code = compress(pc.localDescription);
+  const code = compressSDP(pc.localDescription);
   document.getElementById('answerOutput').value = code;
   document.getElementById('copyAnswerBtn').onclick = () => {
     navigator.clipboard.writeText(code);
