@@ -1,8 +1,25 @@
-import { showHostUI, showPlayerUI } from "./ui.js";
+import { showHostUI, showPlayerUI, updateHostStatus } from "./ui.js";
 import { generateOffer } from "./webrtc.js";
 import { initBoard } from "./board.js";
+import { sendChat } from "./chat.js";
 
-hostBtn.onclick = () => { showHostUI(); initBoard(); };
-playerBtn.onclick = () => { showPlayerUI(); initBoard(); };
+/* ---------- HOST / PLAYER SETUP ---------- */
 
-generateOfferBtn.onclick = generateOffer;
+document.getElementById("hostBtn").onclick = () => {
+  showHostUI();
+  initBoard();
+  updateHostStatus();
+};
+
+document.getElementById("playerBtn").onclick = () => {
+  showPlayerUI();
+  initBoard();
+};
+
+/* ---------- HOST CONTROLS ---------- */
+
+document.getElementById("generateOffer").onclick = generateOffer;
+
+/* ---------- CHAT ---------- */
+
+document.getElementById("sendChat").onclick = sendChat;
