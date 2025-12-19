@@ -34,3 +34,13 @@ export function setupDataChannel(peerId, dc) {
     if (msg.type === "chat") logChat(msg.from, msg.text);
   };
 }
+export function broadcast(data, except = null) {
+  state.peers.forEach((p, id) => {
+    if (id === except) return;
+    if (p.dc.readyState === "open") {
+      p.dc.send(JSON.stringify(data));
+    }
+  });
+}
+
+
