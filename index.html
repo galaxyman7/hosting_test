@@ -15,9 +15,10 @@
   <button onclick="startPlayer()">Join Game</button>
 </div>
 
-<!-- Host Panel -->
+<!-- HOST PANEL -->
 <div id="hostPanel" class="panel hidden">
   <h3>Host</h3>
+
   <p><strong>1) Generate Offer (send to one player)</strong></p>
   <textarea id="hostOffer" readonly></textarea>
   <button class="copy-btn" onclick="copyText('hostOffer', this)">📋 Copy Offer</button>
@@ -30,9 +31,10 @@
   <div id="hostStatus"></div>
 </div>
 
-<!-- Player Panel -->
+<!-- PLAYER PANEL -->
 <div id="playerPanel" class="panel hidden">
   <h3>Player</h3>
+
   <p><strong>1) Paste Host Offer</strong></p>
   <textarea id="playerOffer"></textarea>
   <button onclick="createAnswer()">Create Answer</button>
@@ -42,7 +44,7 @@
   <button class="copy-btn" onclick="copyText('playerAnswer', this)">📋 Copy Answer</button>
 </div>
 
-<!-- Game -->
+<!-- GAME -->
 <div id="game" class="panel hidden">
   <h3>Board</h3>
   <div id="boardContainer">
@@ -50,7 +52,7 @@
   </div>
 </div>
 
-<!-- Chat -->
+<!-- CHAT -->
 <div id="chatPanel" class="panel hidden">
   <h3>Chat</h3>
   <div id="chat"></div>
@@ -58,6 +60,8 @@
   <button onclick="sendChat()">Send</button>
 </div>
 
+<!-- Load in order -->
+<script src="state.js"></script>
 <script src="util.js"></script>
 <script src="board.js"></script>
 <script src="chat.js"></script>
