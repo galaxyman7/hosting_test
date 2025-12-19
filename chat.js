@@ -1,14 +1,19 @@
+const { els } = window.App;
+
 function sendChat(){
-  const text = chatInput.value.trim();
+  const text = els.chatInput.value.trim();
   if(!text) return;
 
-  logChat("Me", text);
+  window.logChat("Me", text);
 
-  if(isHost){
-    broadcast({ type:'chat', from:'Host', text });
-  }else if(playerDC && playerDC.readyState === "open"){
-    playerDC.send(JSON.stringify({ type:'chat', from:'Player', text }));
+  if(window.App.isHost){
+    window.broadcast({ type:'chat', from:'Host', text });
+  }else if(window.App.playerDC && window.App.playerDC.readyState === "open"){
+    window.App.playerDC.send(JSON.stringify({ type:'chat', from:'Player', text }));
   }
 
-  chatInput.value = "";
+  els.chatInput.value = "";
 }
+
+// Expose
+window.sendChat = sendChat;
