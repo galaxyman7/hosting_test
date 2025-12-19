@@ -1,371 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Hex Board – Up to 8 Players</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<style>
-body {
-  font-family: sans-serif;
-  background:#f4f4f9;
-  padding:20px;
-  margin:0;
-}
-
-.panel {
-  background:#fff;
-  padding:15px;
-  border-radius:8px;
-  margin-bottom:15px;
-  box-shadow:0 2px 5px rgba(0,0,0,.1);
-}
-
-button {
-  padding:6px 12px;
-  cursor:pointer;
-  margin-bottom:6px;
-}
-
-textarea {
-  width:100%;
-  height:90px;
-  font-family:monospace;
-  font-size:11px;
-  margin-bottom:6px;
-}
-
-.copy-btn {
-  font-size:12px;
-}
-
-#boardContainer {
-  background:#ddd;
-  padding:10px;
-  border-radius:8px;
-}
-
-.edge {
-  stroke:#999;
-  stroke-width:3;
-  pointer-events:none;
-  transition:.2s;
-}
-
-.edge.active {
-  stroke:#ff4757;
-  stroke-width:6;
-}
-
-.edge-hitbox {
-  stroke:transparent;
-  stroke-width:18;
-  cursor:pointer;
-}
-
-#chat {
-  height:120px;
-  overflow-y:auto;
-  border:1px solid #ccc;
-  padding:8px;
-  margin-bottom:6px;
-  background:#fafafa;
-}
-
-.hidden { display:none; }
-</style>
+  <meta charset="UTF-8" />
+  <title>Hex Board – Up to 8 Players</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
-
 <body>
 
 <h2>Hex Board (Up to 8 Players)</h2>
 
 <div id="setup">
-  <button onclick="startHost()">Host Game</button>
-  <button onclick="startPlayer()">Join Game</button>
+  <button id="hostBtn">Host Game</button>
+  <button id="playerBtn">Join Game</button>
 </div>
 
-<!-- HOST PANEL -->
 <div id="hostPanel" class="panel hidden">
   <h3>Host</h3>
-
-  <p><strong>1) Generate Offer (send to one player)</strong></p>
   <textarea id="hostOffer" readonly></textarea>
-  <button class="copy-btn" onclick="copyText('hostOffer', this)">📋 Copy Offer</button>
-  <button onclick="generateOffer()">Generate Offer</button>
-
-  <p><strong>2) Paste Player Answer</strong></p>
+  <button id="copyOffer">📋 Copy Offer</button>
+  <button id="generateOffer">Generate Offer</button>
   <textarea id="hostAnswer"></textarea>
-  <button onclick="finalizePlayer()">Finalize Player</button>
-
+  <button id="finalizePlayer">Finalize Player</button>
   <div id="hostStatus"></div>
 </div>
 
-<!-- PLAYER PANEL -->
 <div id="playerPanel" class="panel hidden">
   <h3>Player</h3>
-
-  <p><strong>1) Paste Host Offer</strong></p>
   <textarea id="playerOffer"></textarea>
-  <button onclick="createAnswer()">Create Answer</button>
-
-  <p><strong>2) Send this Answer back to Host</strong></p>
+  <button id="createAnswer">Create Answer</button>
   <textarea id="playerAnswer" readonly></textarea>
-  <button class="copy-btn" onclick="copyText('playerAnswer', this)">📋 Copy Answer</button>
+  <button id="copyAnswer">📋 Copy Answer</button>
 </div>
 
-<!-- GAME -->
 <div id="game" class="panel hidden">
-  <h3>Board</h3>
-  <div id="boardContainer">
-    <svg id="hexSvg" width="400" height="400"></svg>
-  </div>
+  <svg id="hexSvg" width="400" height="400"></svg>
 </div>
 
 <div id="chatPanel" class="panel hidden">
-  <h3>Chat</h3>
   <div id="chat"></div>
-  <input id="chatInput" style="width:75%" placeholder="Type message...">
-  <button onclick="sendChat()">Send</button>
+  <input id="chatInput" />
+  <button id="sendChat">Send</button>
 </div>
 
-<script>
-/* =================== STATE =================== */
-const MAX_PLAYERS = 8;
-let isHost = false;
-let peerCounter = 0;
-let pendingPeerId = null;
-
-const peers = new Map(); // peerId -> { pc, dc }
-const activeEdges = new Set();
-let playerPC = null;
-let playerDC = null;
-
-/* =================== UTIL =================== */
-function copyText(id, btn){
-  navigator.clipboard.writeText(document.getElementById(id).value);
-  const t = btn.innerText;
-  btn.innerText = "✔ Copied";
-  setTimeout(()=>btn.innerText=t, 1000);
-}
-
-function logChat(sender, text){
-  const d = document.createElement('div');
-  d.textContent = sender + ": " + text;
-  chat.appendChild(d);
-  chat.scrollTop = chat.scrollHeight;
-}
-
-/* =================== HOST =================== */
-function startHost(){
-  isHost = true;
-  setup.classList.add('hidden');
-  hostPanel.classList.remove('hidden');
-  game.classList.remove('hidden');
-  chatPanel.classList.remove('hidden');
-  initBoard();
-  updateHostStatus();
-}
-
-async function generateOffer(){
-  if(peers.size >= MAX_PLAYERS){
-    alert("Max players reached");
-    return;
-  }
-
-  const peerId = ++peerCounter;
-  pendingPeerId = peerId;
-
-  const pc = new RTCPeerConnection({
-    iceServers:[{urls:"stun:stun.l.google.com:19302"}]
-  });
-
-  const dc = pc.createDataChannel("data");
-  peers.set(peerId, { pc, dc });
-  setupDataChannel(peerId, dc);
-
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-
-  pc.onicecandidate = e=>{
-    if(!e.candidate){
-      hostOffer.value = btoa(pc.localDescription.sdp);
-    }
-  };
-
-  updateHostStatus();
-}
-
-async function finalizePlayer(){
-  if(!pendingPeerId){
-    alert("Generate an offer first");
-    return;
-  }
-
-  const peer = peers.get(pendingPeerId);
-  if(!peer) return;
-
-  const answerSdp = atob(hostAnswer.value.trim());
-  await peer.pc.setRemoteDescription({
-    type:'answer',
-    sdp:answerSdp
-  });
-
-  hostAnswer.value = "";
-  pendingPeerId = null;
-}
-
-/* =================== PLAYER =================== */
-function startPlayer(){
-  setup.classList.add('hidden');
-  playerPanel.classList.remove('hidden');
-  game.classList.remove('hidden');
-  chatPanel.classList.remove('hidden');
-  initBoard();
-
-  playerPC = new RTCPeerConnection({
-    iceServers:[{urls:"stun:stun.l.google.com:19302"}]
-  });
-
-  playerPC.ondatachannel = e=>{
-    playerDC = e.channel;
-    setupDataChannel("host", playerDC);
-  };
-}
-
-async function createAnswer(){
-  const sdp = atob(playerOffer.value.trim());
-  await playerPC.setRemoteDescription({ type:'offer', sdp });
-
-  const ans = await playerPC.createAnswer();
-  await playerPC.setLocalDescription(ans);
-
-  playerPC.onicecandidate = e=>{
-    if(!e.candidate){
-      playerAnswer.value = btoa(playerPC.localDescription.sdp);
-    }
-  };
-}
-
-/* =================== DATA CHANNEL =================== */
-function setupDataChannel(peerId, dc){
-  dc.onopen = ()=>{
-    if(isHost){
-      dc.send(JSON.stringify({
-        type:'sync',
-        edges:[...activeEdges]
-      }));
-      logChat("System","Player connected");
-    }
-  };
-
-  dc.onmessage = e=>{
-    const msg = JSON.parse(e.data);
-
-    if(msg.type === 'edge'){
-      toggleEdge(msg.id, false);
-      if(isHost) broadcast({ type:'edge', id:msg.id }, peerId);
-    }
-
-    if(msg.type === 'sync'){
-      msg.edges.forEach(id=>toggleEdge(id,false));
-    }
-
-    if(msg.type === 'chat'){
-      logChat(msg.from, msg.text);
-      if(isHost) broadcast(msg, peerId);
-    }
-  };
-}
-
-function broadcast(data, except=null){
-  peers.forEach((p,id)=>{
-    if(id === except) return;
-    if(p.dc.readyState === "open"){
-      p.dc.send(JSON.stringify(data));
-    }
-  });
-}
-
-/* =================== CHAT =================== */
-function sendChat(){
-  const text = chatInput.value.trim();
-  if(!text) return;
-
-  logChat("Me", text);
-
-  if(isHost){
-    broadcast({ type:'chat', from:'Host', text });
-  }else if(playerDC && playerDC.readyState === "open"){
-    playerDC.send(JSON.stringify({ type:'chat', from:'Player', text }));
-  }
-
-  chatInput.value = "";
-}
-
-/* =================== BOARD =================== */
-function initBoard(){
-  const svg = hexSvg;
-  svg.innerHTML = "";
-  const size=20, cx=200, cy=200;
-
-  for(let q=-4;q<=4;q++)for(let r=-4;r<=4;r++){
-    if(Math.abs(q+r)>4) continue;
-
-    const x=cx+size*1.5*q;
-    const y=cy+size*(Math.sqrt(3)/2*q+Math.sqrt(3)*r);
-    const pts=[...Array(6)].map((_,i)=>{
-      const a=Math.PI/3*i;
-      return {x:x+size*Math.cos(a),y:y+size*Math.sin(a)};
-    });
-
-    pts.forEach((p,i)=>{
-      const p2=pts[(i+1)%6];
-      const id=[p.x,p.y,p2.x,p2.y].map(n=>Math.round(n)).sort().join('_');
-      if(document.getElementById(id)) return;
-
-      const e=document.createElementNS(svg.namespaceURI,"line");
-      e.id=id;
-      e.setAttribute("x1",p.x);
-      e.setAttribute("y1",p.y);
-      e.setAttribute("x2",p2.x);
-      e.setAttribute("y2",p2.y);
-      e.setAttribute("class","edge");
-
-      const h=document.createElementNS(svg.namespaceURI,"line");
-      h.setAttribute("x1",p.x);
-      h.setAttribute("y1",p.y);
-      h.setAttribute("x2",p2.x);
-      h.setAttribute("y2",p2.y);
-      h.setAttribute("class","edge-hitbox");
-      h.onclick=()=>{
-        if(!isHost) return;
-        toggleEdge(id,true);
-      };
-
-      svg.appendChild(e);
-      svg.appendChild(h);
-    });
-  }
-}
-
-function toggleEdge(id, broadcastIt){
-  const el=document.getElementById(id);
-  if(activeEdges.has(id)){
-    activeEdges.delete(id);
-    el.classList.remove('active');
-  }else{
-    activeEdges.add(id);
-    el.classList.add('active');
-  }
-  if(broadcastIt) broadcast({ type:'edge', id });
-}
-
-/* =================== UI =================== */
-function updateHostStatus(){
-  hostStatus.textContent = `Players: ${peers.size}/${MAX_PLAYERS}`;
-}
-</script>
-
+<script type="module" src="js/main.js"></script>
 </body>
 </html>
+
+
