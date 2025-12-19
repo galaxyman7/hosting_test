@@ -1,49 +1,50 @@
-Hex Board – Up to 8 Players
-This project implements a browser-based multiplayer Hex Board game supporting up to 8 players. It uses WebRTC peer-to-peer connections for communication, with manual copy/paste signaling. The game includes a shared interactive board and a chat system.
+# Hex Board – Up to 8 Players
 
+Browser-based multiplayer Hex Board (up to 8 players) using WebRTC data channels and manual copy/paste signaling. Features: shared edge toggling on a hex grid and a simple chat.
 
+## Files
 
-🔄 Program Flow
-- Setup
-- User chooses Host or Player.
-- Panels are shown accordingly.
-- Host
-- Generates an SDP offer → copies to player.
-- Pastes player’s answer → finalizes connection.
-- Maintains a list of peers (Map).
-- Player
-- Pastes host’s offer → generates answer.
-- Sends answer back to host.
-- Board
-- Rendered by board.js.
-- Host clicks edges → toggles active state.
-- Changes broadcast to all peers.
-- Chat
-- Messages sent via data channel.
-- Host rebroadcasts to all peers.
-- Displayed in chat panel.
+- **index.html** — UI markup and script loading.
+- **style.css** — Visual styles.
+- **state.js** — Shared global namespace `window.App`:
+  - State: `isHost`, `peerCounter`, `pendingPeerId`, `peers`, `activeEdges`, `playerPC`, `playerDC`, `MAX_PLAYERS`.
+  - DOM refs under `App.els`: `setup`, `hostPanel`, `playerPanel`, `game`, `chatPanel`, `hostOffer`, `hostAnswer`, `hostStatus`, `playerOffer`, `playerAnswer`, `hexSvg`, `chat`, `chatInput`.
+- **util.js** — Utilities:
+  - `copyText(id, btn)` -> clipboard copy feedback; outputs UI change and copied text.
+  - `logChat(sender, text)` -> appends a line to chat UI.
+- **board.js** — Board drawing and edge control:
+  - `initBoard()` -> renders hex grid into `#hexSvg`.
+  - `toggleEdge(id, broadcastIt)` -> toggles CSS class and updates `App.activeEdges`, optionally broadcasts `{type:'edge', id}`.
+- **chat.js** — Chat send handler:
+  - `sendChat()` -> reads `#chatInput`, logs locally, sends via host broadcast or player datachannel.
+- **network.js** — Host/Player setup, signaling, channels:
+  - Host: `startHost()`, `generateOffer()`, `finalizePlayer()`.
+  - Player: `startPlayer()`, `createAnswer()`.
+  - Channels: `setupDataChannel(peerId, dc)`, `broadcast(data, except?)`.
+  - Messages:
+    - `edge`: `{ type:'edge', id }`
+    - `sync`: `{ type:'sync', edges:[...] }`
+    - `chat`: `{ type:'chat', from, text }`
 
-📡 Data Channel Messages
-- { type:'edge', id } → toggle edge
-- { type:'sync', edges:[...] } → initial sync
-- { type:'chat', from, text } → chat message
+All UI-triggered functions are exported on `window`:
+`startHost`, `generateOffer`, `finalizePlayer`, `startPlayer`, `createAnswer`, `sendChat`, `copyText`.
 
-⚙️ Inputs & Outputs by Module
-util.js
-- Inputs: textarea/button IDs, chat text
-- Outputs: clipboard copy, DOM chat log entries
-board.js
-- Inputs: SVG container, host clicks
-- Outputs: rendered hex grid, toggled edge states, broadcasts edge events
-chat.js
-- Inputs: chat input field, data channel
-- Outputs: sent/received chat messages, DOM updates
-network.js
-- Inputs: host/player actions, SDP strings
-- Outputs: peer connections, synchronized board/chat state
+## Flow
 
-✅ Notes
-- Max players: 8
-- Signaling: Manual copy/paste of SDP
-- Dependencies: None (vanilla JS, WebRTC, DOM APIs)
-- Integrity: All features (board, chat, host/player setup) preserved from original single-file version
+1. Host starts, generates offer (base64 SDP after ICE gathering), copies to Player.
+2. Player pastes offer, creates answer, copies back to Host.
+3. Data channel opens; Host sends a `sync` of active edges.
+4. Host clicks edges to toggle; broadcasts `edge` to all players.
+5. Chat messages are relayed via channel; Host rebroadcasts.
+
+## Inputs/Outputs
+
+- **Host offer/answer textareas** — Base64-encoded SDP strings; copied/pasted manually.
+- **Board clicks (Host only)** — Input: click on edge hitbox; Output: edge active toggle + broadcast.
+- **Chat input** — Input: text; Output: appended to chat and sent over data channel.
+
+## Notes
+
+- Clipboard copy requires HTTPS or localhost. Fallback via `execCommand('copy')` is included.
+- ICE SDP export is robust via both `onicecandidate(null)` and `icegatheringstatechange='complete'`.
+- No external deps; pure DOM + WebRTC.
