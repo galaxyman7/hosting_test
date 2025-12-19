@@ -3,23 +3,27 @@ import { generateOffer } from "./webrtc.js";
 import { initBoard } from "./board.js";
 import { sendChat } from "./chat.js";
 
-/* ---------- HOST / PLAYER SETUP ---------- */
+document.addEventListener("DOMContentLoaded", () => {
 
-document.getElementById("hostBtn").onclick = () => {
-  showHostUI();
-  initBoard();
-  updateHostStatus();
-};
+  /* ---------- HOST / PLAYER SETUP ---------- */
 
-document.getElementById("playerBtn").onclick = () => {
-  showPlayerUI();
-  initBoard();
-};
+  document.getElementById("hostBtn").onclick = () => {
+    showHostUI();
+    initBoard();
+    updateHostStatus();
+  };
 
-/* ---------- HOST CONTROLS ---------- */
+  document.getElementById("playerBtn").onclick = () => {
+    showPlayerUI();
+    initBoard();
+  };
 
-document.getElementById("generateOffer").onclick = generateOffer;
+  /* ---------- HOST CONTROLS ---------- */
 
-/* ---------- CHAT ---------- */
+  document.getElementById("generateOffer").onclick = generateOffer;
 
-document.getElementById("sendChat").onclick = sendChat;
+  /* ---------- CHAT ---------- */
+
+  document.getElementById("sendChat").onclick = sendChat;
+
+});
